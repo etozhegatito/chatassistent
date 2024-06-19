@@ -3,22 +3,26 @@ from flask_cors import CORS
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
 app = Flask(__name__)
-CORS(app)  # Включение CORS для всех маршрутов
+CORS(app)  # Enable CORS for all routes
 
-# Подключение к PostgreSQL
-
-
-# Загрузка модели и токенизатора
+# Load model and tokenizer
 model_path = "./results/gpt2-chatbot"
-tokenizer = GPT2Tokenizer.from_pretrained(model_path)
-model = GPT2LMHeadModel.from_pretrained(model_path)
+try:
+    tokenizer = GPT2Tokenizer.from_pretrained(model_path)
+    model = GPT2LMHeadModel.from_pretrained(model_path)
+except Exception as e:
+    print(f"Error loading model: {e}")
+    tokenizer = None
+    model = None
 
-# Установка pad_token, если он не установлен
-if tokenizer.pad_token is None:
+# Set pad_token if not set
+if tokenizer and tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
-
 def generate_response(prompt, model, tokenizer, max_length=100):
+    if model is None or tokenizer is None:
+        return "Model or tokenizer not loaded"
+
     inputs = tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)
     input_ids = inputs["input_ids"]
     attention_mask = inputs["attention_mask"]
@@ -45,9 +49,10 @@ def index():
 
 @app.route('/generate', methods=['POST'])
 def generate():
-    data = request.json
-    user_id = data.get("user_id", "")
-    prompt = data.get("prompt", "")
+    if not request.json or 'prompt' not in request.json:
+        return jsonify({"error": "Invalid request format. 'prompt' field is required."}), 400
+
+    prompt = request.json['prompt']
     response = generate_response(prompt, model, tokenizer)
     return jsonify({"response": response})
 
